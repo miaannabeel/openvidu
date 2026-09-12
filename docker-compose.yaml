@@ -16,10 +16,9 @@ services:
       - caddy-config:/config
       - /etc/localtime:/etc/localtime:ro
     ports:
-      - 80:80
-      - 443:443
-      - 1935:1935
-      - 9000:9000
+      - 127.0.0.1:8443:443
+      - 127.0.0.1:1935:1935
+      - 127.0.0.1:9090:9000
     networks:
       - openvidu-network
     labels:
@@ -30,7 +29,7 @@ services:
     container_name: redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6380:6379"
     extra_hosts:
       - host.docker.internal:host-gateway
     command: redis-server --requirepass ${REDIS_PASSWORD:?mandatory}
@@ -65,24 +64,32 @@ services:
       - logging=true
 
   mongo:
-    image: docker.io/openvidu/mongodb:8.0.26-r0
+    image: mongo:4.4
     container_name: mongo
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     extra_hosts:
       - host.docker.internal:host-gateway
     environment:
-      - MONGODB_ROOT_USER=${MONGO_ADMIN_USERNAME:?mandatory}
-      - MONGODB_ROOT_PASSWORD=${MONGO_ADMIN_PASSWORD:?mandatory}
-      - MONGODB_REPLICA_SET_MODE=primary
-      - MONGODB_REPLICA_SET_NAME=rs0
-      - MONGODB_REPLICA_SET_KEY=${MONGO_ADMIN_PASSWORD:?mandatory}
-      - MONGODB_ADVERTISED_HOSTNAME=host.docker.internal
-      - MONGODB_NET_BINDIP=0.0.0.0
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ADMIN_USERNAME:?mandatory}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ADMIN_PASSWORD:?mandatory}
+    entrypoint:
+      - bash
+      - -c
+      - |
+        echo "secretkey1234567890" > /tmp/keyfile
+        chmod 400 /tmp/keyfile
+        chown 999:999 /tmp/keyfile
+        exec docker-entrypoint.sh mongod --replSet replicaset --keyFile /tmp/keyfile --bind_ip_all
     volumes:
-      - mongo-data:/bitnami/mongodb
+      - mongo-data:/data/db
       - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongo -u ${MONGO_ADMIN_USERNAME} -p${MONGO_ADMIN_PASSWORD} --authenticationDatabase admin --eval 'rs.initiate({_id: \"replicaset\", members: [{_id: 0, host: \"mongo:27017\"}]})'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - openvidu-network
     labels:
@@ -98,7 +105,7 @@ services:
       - SERVER_PORT=5000
       - ADMIN_USERNAME=${DASHBOARD_ADMIN_USERNAME:?mandatory}
       - ADMIN_PASSWORD=${DASHBOARD_ADMIN_PASSWORD:?mandatory}
-      - DATABASE_URL=mongodb://${MONGO_ADMIN_USERNAME:?mandatory}:${MONGO_ADMIN_PASSWORD:?mandatory}@mongo:27017/?replicaSet=rs0&readPreference=primaryPreferred
+      - DATABASE_URL=mongodb://${MONGO_ADMIN_USERNAME:?mandatory}:${MONGO_ADMIN_PASSWORD:?mandatory}@mongo:27017/?replicaSet=replicaset&readPreference=primaryPreferred
     volumes:
       - /etc/localtime:/etc/localtime:ro
     networks:
@@ -113,10 +120,11 @@ services:
     network_mode: host
     extra_hosts:
       - host.docker.internal:host-gateway
+      - mongo:127.0.0.1
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD:?mandatory}
-      - REDIS_HOST=host.docker.internal:6379
-      - LIVEKIT_OPENVIDU_ANALYTICS_MONGO_URL=mongodb://${MONGO_ADMIN_USERNAME:?mandatory}:${MONGO_ADMIN_PASSWORD:?mandatory}@host.docker.internal:27017/?replicaSet=rs0&readPreference=primaryPreferred
+      - REDIS_HOST=127.0.0.1:6380
+      - LIVEKIT_OPENVIDU_ANALYTICS_MONGO_URL=mongodb://${MONGO_ADMIN_USERNAME:?mandatory}:${MONGO_ADMIN_PASSWORD:?mandatory}@mongo:27017/?replicaSet=replicaset&readPreference=primaryPreferred
       - LIVEKIT_TURN_DOMAIN=${DOMAIN_NAME:?mandatory}
       - LIVEKIT_WEBHOOK_API_KEY=${LIVEKIT_API_KEY:?mandatory}
       - "LIVEKIT_KEYS=${LIVEKIT_API_KEY:?mandatory}: ${LIVEKIT_API_SECRET:?mandatory}"
@@ -136,8 +144,8 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     ports:
-      - 8085:8085
-      - 7885:7885/udp
+      - 127.0.0.1:8086:8085
+      - 127.0.0.1:7885:7885/udp
     environment:
       - INGRESS_CONFIG_FILE=/etc/ingress.yaml
       - REDIS_PASSWORD=${REDIS_PASSWORD:?mandatory}
@@ -180,7 +188,7 @@ services:
     extra_hosts:
       - host.docker.internal:host-gateway
     ports:
-      - 9080:9080
+      - 127.0.0.1:9080:9080
     environment:
       - LIVEKIT_URL=wss://${DOMAIN_NAME:?mandatory}/
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:?mandatory}
@@ -191,7 +199,7 @@ services:
       - MEET_S3_ACCESS_KEY=${MINIO_ACCESS_KEY:?mandatory}
       - MEET_S3_SECRET_KEY=${MINIO_SECRET_KEY:?mandatory}
       - MEET_REDIS_PASSWORD=${REDIS_PASSWORD:?mandatory}
-      - MEET_MONGO_URI=mongodb://${MONGO_ADMIN_USERNAME:?mandatory}:${MONGO_ADMIN_PASSWORD:?mandatory}@mongo:27017/?replicaSet=rs0&readPreference=primaryPreferred
+      - MEET_MONGO_URI=mongodb://${MONGO_ADMIN_USERNAME:?mandatory}:${MONGO_ADMIN_PASSWORD:?mandatory}@mongo:27017/?replicaSet=replicaset&readPreference=primaryPreferred
       - MEET_BASE_URL=http://${DOMAIN_NAME:?mandatory}/
       - MEET_BASE_PATH=${MEET_BASE_PATH:-/meet}
       - MEET_CONFIG_DIR=/config/meet.env

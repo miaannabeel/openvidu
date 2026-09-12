@@ -11,13 +11,13 @@ storage:
 apps:
   # ----
   # Own certificate (Custom certificate) example (uncomment if you want to use your own certs instead of Let's Encrypt)
-  # tls:
-  #   certificates:
-  #     load_files:
-  #       - certificate: "/owncert/fullchain.pem"
-  #         key: "/owncert/privkey.pem"
-  #         tags:
-  #           - "__DOMAIN_NAME__"
+  tls:
+    certificates:
+      load_files:
+        - certificate: "/owncert/fullchain.pem"
+          key: "/owncert/privkey.pem"
+          tags:
+            - "__DOMAIN_NAME__"
   # ----
   # Self-signed certificate example (uncomment if you want to use self-signed certs, not recommended for production)
   # tls:
@@ -30,14 +30,14 @@ apps:
   #             - module: internal
   # ----
   # Default: Let's Encrypt with ACME
-  tls:
-    certificates:
-      automate:
-        - "__DOMAIN_NAME__"
-    automation:
-      policies:
-        - issuers:
-            - module: acme
+  # tls:
+  #   certificates:
+  #     automate:
+  #       - "__DOMAIN_NAME__"
+  #   automation:
+  #     policies:
+  #       - issuers:
+  #           - module: acme
 
   layer4:
     servers:
